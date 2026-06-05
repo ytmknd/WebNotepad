@@ -6,6 +6,7 @@
   const statusText = document.getElementById("statusText");
   const localFileInput = document.getElementById("localFileInput");
   const menuPopup = document.getElementById("menuPopup");
+  const tabContextPopup = document.getElementById("tabContextPopup");
   const menuButtons = [...document.querySelectorAll(".menu-item")];
   const tabList = document.getElementById("tabList");
   const newTabBtn = document.getElementById("newTabBtn");
@@ -24,6 +25,10 @@
       fileNew: "新規\tCtrl+N",
       fileNewTab: "新しいタブ\tCtrl+T",
       fileCloseTab: "タブを閉じる\tCtrl+W",
+      tabClose: "タブを閉じる",
+      tabCloseOthers: "他のタブを閉じる",
+      tabCloseRight: "右側のタブを閉じる",
+      tabReopenClosed: "閉じたタブを再度開く",
       fileOpen: "開く...\tCtrl+O",
       fileSave: "保存\tCtrl+S",
       fileSaveAs: "名前を付けて保存...",
@@ -57,6 +62,7 @@
       confirmCloseTab: "このタブには未保存の変更があります。閉じますか?",
       unsavedTitle: "未保存の変更",
       unsavedMessage: "このタブには未保存の変更があります。",
+      unsavedMessageNamed: "{name} には未保存の変更があります。",
       unsavedSave: "保存",
       unsavedDiscard: "保存しない",
       saveFailed: "保存に失敗しました: {error}",
@@ -104,6 +110,10 @@
       fileNew: "New\tCtrl+N",
       fileNewTab: "New Tab\tCtrl+T",
       fileCloseTab: "Close Tab\tCtrl+W",
+      tabClose: "Close tab",
+      tabCloseOthers: "Close other tabs",
+      tabCloseRight: "Close tabs to the right",
+      tabReopenClosed: "Reopen closed tab",
       fileOpen: "Open...\tCtrl+O",
       fileSave: "Save\tCtrl+S",
       fileSaveAs: "Save As...",
@@ -137,6 +147,7 @@
       confirmCloseTab: "This tab has unsaved changes. Close it anyway?",
       unsavedTitle: "Unsaved changes",
       unsavedMessage: "This tab has unsaved changes.",
+      unsavedMessageNamed: "{name} has unsaved changes.",
       unsavedSave: "Save",
       unsavedDiscard: "Don't Save",
       saveFailed: "Failed to save: {error}",
@@ -197,6 +208,8 @@
     statusBarVisible: true,
     tabs: [],
     activeTabId: null,
+    closedTabs: [],
+    draggedTabId: null,
     driveClientId: localStorage.getItem("web-notepad.driveClientId") || "",
     driveToken: null,
     tokenClient: null,
@@ -210,6 +223,9 @@
       fileName: initial.fileName || t("untitled"),
       text: initial.text || "",
       textChanged: Boolean(initial.textChanged),
+      selectionStart: Number(initial.selectionStart || 0),
+      selectionEnd: Number(initial.selectionEnd || 0),
+      scrollTop: Number(initial.scrollTop || 0),
       localFileHandle: initial.localFileHandle || null,
       driveFileId: initial.driveFileId || null
     };
@@ -224,6 +240,9 @@
           fileName: tab.fileName,
           text: tab.text,
           textChanged: tab.textChanged,
+          selectionStart: tab.selectionStart,
+          selectionEnd: tab.selectionEnd,
+          scrollTop: tab.scrollTop,
           driveFileId: tab.driveFileId
         }))
       };
@@ -250,6 +269,9 @@
           fileName: typeof tab.fileName === "string" && tab.fileName ? tab.fileName : t("untitled"),
           text: typeof tab.text === "string" ? tab.text : "",
           textChanged: Boolean(tab.textChanged),
+          selectionStart: Number(tab.selectionStart || 0),
+          selectionEnd: Number(tab.selectionEnd || 0),
+          scrollTop: Number(tab.scrollTop || 0),
           driveFileId: tab.driveFileId || null
         })
       );
@@ -285,7 +307,7 @@
       return true;
     }
 
-    const action = await askUnsavedAction(t("unsavedMessage"));
+    const action = await askUnsavedAction(t("unsavedMessageNamed", { name: tab.fileName || t("untitled") }));
     if (action === "cancel") {
       return false;
     }
@@ -307,6 +329,110 @@
       syncEditorFromActiveTab();
     }
     return true;
+  }
+
+  function reorderTabs(fromId, toId) {
+    if (!fromId || !toId || fromId === toId) {
+      return;
+    }
+    const fromIndex = state.tabs.findIndex((tab) => tab.id === fromId);
+    const toIndex = state.tabs.findIndex((tab) => tab.id === toId);
+    if (fromIndex === -1 || toIndex === -1) {
+      return;
+    }
+    const [moved] = state.tabs.splice(fromIndex, 1);
+    state.tabs.splice(toIndex, 0, moved);
+    persistSession();
+    renderTabs();
+  }
+
+  function pushClosedTab(tab) {
+    state.closedTabs.unshift({
+      fileName: tab.fileName,
+      text: tab.text,
+      textChanged: tab.textChanged,
+      selectionStart: tab.selectionStart,
+      selectionEnd: tab.selectionEnd,
+      scrollTop: tab.scrollTop,
+      driveFileId: tab.driveFileId
+    });
+    if (state.closedTabs.length > 20) {
+      state.closedTabs.length = 20;
+    }
+  }
+
+  async function closeTabsByIds(tabIds) {
+    for (const tabId of tabIds) {
+      const current = state.tabs.find((tab) => tab.id === tabId);
+      if (!current) {
+        continue;
+      }
+      await closeTab(tabId);
+      if (state.tabs.some((tab) => tab.id === tabId)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function closeOtherTabs(tabId) {
+    const ids = state.tabs.filter((tab) => tab.id !== tabId).map((tab) => tab.id);
+    await closeTabsByIds(ids);
+  }
+
+  async function closeTabsToRight(tabId) {
+    const index = state.tabs.findIndex((tab) => tab.id === tabId);
+    if (index === -1) {
+      return;
+    }
+    const ids = state.tabs.slice(index + 1).map((tab) => tab.id);
+    await closeTabsByIds(ids);
+  }
+
+  function reopenClosedTab() {
+    const snapshot = state.closedTabs.shift();
+    if (!snapshot) {
+      return;
+    }
+    openNewTab(snapshot);
+  }
+
+  function closeTabContextPopup() {
+    tabContextPopup.classList.add("hidden");
+    tabContextPopup.innerHTML = "";
+  }
+
+  function openTabContextMenu(tabId, x, y) {
+    closeMenuPopup();
+    closeTabContextPopup();
+
+    const items = [
+      [t("tabClose"), async () => closeTab(tabId)],
+      [t("tabCloseOthers"), async () => closeOtherTabs(tabId)],
+      [t("tabCloseRight"), async () => closeTabsToRight(tabId)],
+      [t("tabReopenClosed"), () => reopenClosedTab()]
+    ];
+
+    items.forEach(([label, action], index) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = label;
+      btn.addEventListener("click", async () => {
+        closeTabContextPopup();
+        await action();
+      });
+      tabContextPopup.appendChild(btn);
+
+      if (index === 2) {
+        const sep = document.createElement("div");
+        sep.className = "menu-separator";
+        tabContextPopup.appendChild(sep);
+      }
+    });
+
+    tabContextPopup.style.left = `${x}px`;
+    tabContextPopup.style.top = `${y}px`;
+    tabContextPopup.classList.remove("hidden");
   }
 
   function getActiveTab() {
@@ -331,6 +457,7 @@
     state.tabs.forEach((tab) => {
       const tabBtn = document.createElement("button");
       tabBtn.type = "button";
+      tabBtn.draggable = true;
       tabBtn.className = `tab${tab.id === state.activeTabId ? " active" : ""}`;
       tabBtn.dataset.tabId = tab.id;
 
@@ -340,6 +467,7 @@
 
       const closeBtn = document.createElement("button");
       closeBtn.type = "button";
+      closeBtn.draggable = false;
       closeBtn.className = "tab__close";
       closeBtn.textContent = "×";
       closeBtn.addEventListener("click", async (e) => {
@@ -354,6 +482,34 @@
           await closeTab(tab.id);
         }
       });
+      tabBtn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        openTabContextMenu(tab.id, e.clientX, e.clientY);
+      });
+      tabBtn.addEventListener("dragstart", (e) => {
+        state.draggedTabId = tab.id;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", tab.id);
+      });
+      tabBtn.addEventListener("dragover", (e) => {
+        if (state.draggedTabId && state.draggedTabId !== tab.id) {
+          e.preventDefault();
+          tabBtn.classList.add("tab--drag-over");
+        }
+      });
+      tabBtn.addEventListener("dragleave", () => {
+        tabBtn.classList.remove("tab--drag-over");
+      });
+      tabBtn.addEventListener("drop", (e) => {
+        e.preventDefault();
+        tabBtn.classList.remove("tab--drag-over");
+        const fromId = state.draggedTabId || e.dataTransfer.getData("text/plain");
+        reorderTabs(fromId, tab.id);
+      });
+      tabBtn.addEventListener("dragend", () => {
+        state.draggedTabId = null;
+        tabList.querySelectorAll(".tab--drag-over").forEach((node) => node.classList.remove("tab--drag-over"));
+      });
 
       tabBtn.append(title, closeBtn);
       tabList.appendChild(tabBtn);
@@ -363,9 +519,24 @@
   function syncEditorFromActiveTab() {
     const active = ensureActiveTab();
     editor.value = active.text;
+    const maxPos = editor.value.length;
+    const start = Math.max(0, Math.min(active.selectionStart || 0, maxPos));
+    const end = Math.max(start, Math.min(active.selectionEnd || start, maxPos));
+    editor.setSelectionRange(start, end);
+    editor.scrollTop = Math.max(0, active.scrollTop || 0);
     updateCursorStatus();
     renderTabs();
     setTitle();
+  }
+
+  function syncActiveViewStateFromEditor() {
+    const active = getActiveTab();
+    if (!active) {
+      return;
+    }
+    active.selectionStart = editor.selectionStart;
+    active.selectionEnd = editor.selectionEnd;
+    active.scrollTop = editor.scrollTop;
   }
 
   function syncActiveTabFromEditor() {
@@ -374,6 +545,7 @@
       return;
     }
     active.text = editor.value;
+    syncActiveViewStateFromEditor();
     persistSession();
   }
 
@@ -405,6 +577,7 @@
     }
 
     const closeIndex = state.tabs.findIndex((item) => item.id === tabId);
+  pushClosedTab(tab);
     state.tabs.splice(closeIndex, 1);
     if (!state.tabs.length) {
       const fresh = createTab();
@@ -536,6 +709,11 @@
     const popupNode = document.getElementById("menuPopup");
     if (popupNode) {
       popupNode.setAttribute("aria-label", locale === "ja" ? "ポップアップメニュー" : "Popup menu");
+    }
+
+    const tabPopupNode = document.getElementById("tabContextPopup");
+    if (tabPopupNode) {
+      tabPopupNode.setAttribute("aria-label", locale === "ja" ? "タブメニュー" : "Tab menu");
     }
   }
 
@@ -943,6 +1121,9 @@
       if (!menuPopup.contains(e.target)) {
         closeMenuPopup();
       }
+      if (!tabContextPopup.contains(e.target)) {
+        closeTabContextPopup();
+      }
     });
   }
 
@@ -1154,6 +1335,10 @@
 
     editor.addEventListener("click", updateCursorStatus);
     editor.addEventListener("keyup", updateCursorStatus);
+    editor.addEventListener("click", syncActiveViewStateFromEditor);
+    editor.addEventListener("keyup", syncActiveViewStateFromEditor);
+    editor.addEventListener("select", syncActiveViewStateFromEditor);
+    editor.addEventListener("scroll", syncActiveViewStateFromEditor);
 
     editor.addEventListener("dragover", (e) => e.preventDefault());
     editor.addEventListener("drop", async (e) => {
@@ -1226,6 +1411,12 @@
       } else if (ctrl && e.key === "Tab") {
         e.preventDefault();
         moveTabBy(e.shiftKey ? -1 : 1);
+      } else if (ctrl && e.key === "PageUp") {
+        e.preventDefault();
+        moveTabBy(-1);
+      } else if (ctrl && e.key === "PageDown") {
+        e.preventDefault();
+        moveTabBy(1);
       } else if (ctrl && e.key.toLowerCase() === "f") {
         e.preventDefault();
         openFindDialog();
@@ -1243,6 +1434,7 @@
         insertDateTime();
       } else if (e.key === "Escape") {
         closeMenuPopup();
+        closeTabContextPopup();
       }
     });
 

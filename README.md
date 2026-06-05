@@ -6,15 +6,17 @@ A browser-based text editor that imitates Windows Notepad UI and basic behavior.
 
 - Windows Notepad-like title bar, menu bar, status bar, and plain text area
 - Multi-tab editing (new tab, close tab, tab switch, middle-click close)
+- Drag-and-drop tab reordering
+- Tab context menu (close tab, close others, close tabs to the right, reopen closed tab)
 - File operations: New (clear current tab), Open, Save, Save As
 - Edit operations: Undo, Cut, Copy, Paste, Delete, Find, Replace, Select All, Time/Date
 - Unsaved-changes 3-way confirmation (Save / Don't Save / Cancel) when closing tab or exiting
-- Session restore for tabs and contents via localStorage
+- Session restore for tabs, contents, cursor position, and scroll offset via localStorage
 - Format operations: Word Wrap
 - View operations: Status Bar
 - Save/open text files on local device (Chromebook supported by browser file APIs)
 - Save/open text files on Google Drive
-- Keyboard shortcuts: Ctrl+S/O/F/H/G, Ctrl+N/T, Ctrl+W, Ctrl+Tab / Ctrl+Shift+Tab, F3, F5
+- Keyboard shortcuts: Ctrl+S/O/F/H/G, Ctrl+N/T, Ctrl+W, Ctrl+Tab / Ctrl+Shift+Tab, Ctrl+PgUp/PgDn, F3, F5
 
 ## Files
 

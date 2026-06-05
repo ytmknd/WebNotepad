@@ -153,6 +153,10 @@ body {
   border-bottom: 2px solid #1a73e8;
 }
 
+.tab.tab--drag-over {
+  box-shadow: inset 2px 0 0 #1a73e8;
+}
+
 .tab__title {
   overflow: hidden;
   text-overflow: ellipsis;
