@@ -34,8 +34,8 @@ To make this app installable as a Chromebook app, run it over HTTP/HTTPS (not `f
 
 1. Start a local server in this folder.
 2. Open the served URL in Chrome (for example `http://localhost:5500`).
-3. In the app menu, choose Help > アプリをインストール.
-4. If the install prompt does not appear, use Chrome menu > アプリをインストール.
+3. In the app menu, choose Help > Install App.
+4. If the install prompt does not appear, use Chrome menu > Install App.
 
 Example local server:
 
@@ -96,3 +96,7 @@ Behavior:
 - If browser File System Access API is unavailable, local Save As falls back to download.
 - Google Drive operations require user sign-in and consent.
 - Service Worker caches app shell files for faster launch and basic offline behavior.
+
+## License
+
+This project is licensed under the MIT License.
