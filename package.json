@@ -1,0 +1,26 @@
+{
+  "name": "webnotepad",
+  "version": "1.0.0",
+  "description": "A browser-based text editor that imitates Windows Notepad UI and basic behavior.",
+  "main": "app.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ytmknd/WebNotepad.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ytmknd/WebNotepad/issues"
+  },
+  "homepage": "https://github.com/ytmknd/WebNotepad#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "http-server": "^14.1.1"
+  }
+}

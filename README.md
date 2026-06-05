@@ -34,6 +34,27 @@ Hosted version (GitHub Pages):
 
 - https://ytmknd.github.io/WebNotepad/
 
+## Automated Tests
+
+E2E tests are provided with Playwright.
+
+1. Install dependencies:
+
+```powershell
+npm install
+```
+
+2. Run tests:
+
+```powershell
+npm test
+```
+
+Optional:
+
+- `npm run test:headed` for headed browser run
+- `npm run test:ui` for Playwright UI mode
+
 ## PWA Install (Chromebook)
 
 To make this app installable as a Chromebook app, run it over HTTP/HTTPS (not `file://`).
