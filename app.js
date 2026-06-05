@@ -1097,7 +1097,21 @@
       const btn = document.createElement("button");
       btn.type = "button";
       const checked = checkedFn && checkedFn();
-      btn.textContent = checked ? `[x] ${label}` : label;
+      const [mainLabel, shortcut] = label.split("\t");
+
+      const check = document.createElement("span");
+      check.className = "menu-item__check";
+      check.textContent = checked ? "✓" : "";
+
+      const text = document.createElement("span");
+      text.className = "menu-item__label";
+      text.textContent = mainLabel;
+
+      const sc = document.createElement("span");
+      sc.className = "menu-item__shortcut";
+      sc.textContent = shortcut || "";
+
+      btn.append(check, text, sc);
       btn.addEventListener("click", () => {
         closeMenuPopup();
         action();
