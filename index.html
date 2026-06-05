@@ -33,6 +33,11 @@
         <button class="menu-item" data-menu="help" id="menuHelpBtn">ヘルプ(H)</button>
       </nav>
 
+      <section class="tab-strip" aria-label="ドキュメントタブ" id="tabStrip">
+        <div class="tab-list" id="tabList"></div>
+        <button class="tab-new-btn" id="newTabBtn" type="button" aria-label="新規タブ">+</button>
+      </section>
+
       <section class="dropzone-wrap">
         <textarea
           id="editor"
@@ -96,6 +101,18 @@
         <div class="dialog-actions">
           <button id="goToBtn" value="default">移動</button>
           <button id="goToCancelBtn" value="cancel">キャンセル</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="unsavedDialog" class="app-dialog">
+      <form method="dialog" id="unsavedForm">
+        <h2 id="unsavedDialogTitle">未保存の変更</h2>
+        <p id="unsavedDialogMessage">このタブには未保存の変更があります。</p>
+        <div class="dialog-actions">
+          <button id="unsavedSaveBtn" value="save">保存</button>
+          <button id="unsavedDiscardBtn" value="discard">保存しない</button>
+          <button id="unsavedCancelBtn" value="cancel">キャンセル</button>
         </div>
       </form>
     </dialog>

@@ -5,18 +5,22 @@ A browser-based text editor that imitates Windows Notepad UI and basic behavior.
 ## Features
 
 - Windows Notepad-like title bar, menu bar, status bar, and plain text area
-- File operations: New, Open, Save, Save As
+- Multi-tab editing (new tab, close tab, tab switch, middle-click close)
+- File operations: New (clear current tab), Open, Save, Save As
 - Edit operations: Undo, Cut, Copy, Paste, Delete, Find, Replace, Select All, Time/Date
-- Format operations: Word Wrap, Font
-- View operations: Zoom In/Out/Reset, Status Bar
+- Unsaved-changes 3-way confirmation (Save / Don't Save / Cancel) when closing tab or exiting
+- Session restore for tabs and contents via localStorage
+- Format operations: Word Wrap
+- View operations: Status Bar
 - Save/open text files on local device (Chromebook supported by browser file APIs)
 - Save/open text files on Google Drive
+- Keyboard shortcuts: Ctrl+S/O/F/H/G, Ctrl+N/T, Ctrl+W, Ctrl+Tab / Ctrl+Shift+Tab, F3, F5
 
 ## Files
 
 - `index.html`: UI structure
 - `styles.css`: Windows-like styling
-- `app.js`: editor logic, keyboard shortcuts, local file API, Google Drive API calls
+- `app.js`: tab state management, editor logic, keyboard shortcuts, local file API, Google Drive API calls, session restore
 
 ## Run
 
@@ -96,6 +100,7 @@ Behavior:
 - If browser File System Access API is unavailable, local Save As falls back to download.
 - Google Drive operations require user sign-in and consent.
 - Service Worker caches app shell files for faster launch and basic offline behavior.
+- Tab session data is stored in `localStorage` key `web-notepad.session.v1`.
 
 ## License
 

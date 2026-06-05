@@ -7,6 +7,8 @@
   const localFileInput = document.getElementById("localFileInput");
   const menuPopup = document.getElementById("menuPopup");
   const menuButtons = [...document.querySelectorAll(".menu-item")];
+  const tabList = document.getElementById("tabList");
+  const newTabBtn = document.getElementById("newTabBtn");
   const locale = (navigator.language || "").toLowerCase().startsWith("ja") ? "ja" : "en";
   const runtimeConfig = window.WEB_NOTEPAD_CONFIG || {};
 
@@ -20,6 +22,8 @@
       menuView: "表示(V)",
       menuHelp: "ヘルプ(H)",
       fileNew: "新規\tCtrl+N",
+      fileNewTab: "新しいタブ\tCtrl+T",
+      fileCloseTab: "タブを閉じる\tCtrl+W",
       fileOpen: "開く...\tCtrl+O",
       fileSave: "保存\tCtrl+S",
       fileSaveAs: "名前を付けて保存...",
@@ -50,6 +54,11 @@
       statusDriveSaved: "Google Drive に保存しました",
       statusDriveAutoConfigured: "Chromebook向けにGoogle Drive設定を自動適用しました",
       confirmDiscard: "未保存の変更があります。破棄して続行しますか?",
+      confirmCloseTab: "このタブには未保存の変更があります。閉じますか?",
+      unsavedTitle: "未保存の変更",
+      unsavedMessage: "このタブには未保存の変更があります。",
+      unsavedSave: "保存",
+      unsavedDiscard: "保存しない",
       saveFailed: "保存に失敗しました: {error}",
       searchNotFound: "検索文字列が見つかりませんでした。",
       oauthClientRequired: "OAuth Client ID を入力してください。",
@@ -93,6 +102,8 @@
       menuView: "View(V)",
       menuHelp: "Help(H)",
       fileNew: "New\tCtrl+N",
+      fileNewTab: "New Tab\tCtrl+T",
+      fileCloseTab: "Close Tab\tCtrl+W",
       fileOpen: "Open...\tCtrl+O",
       fileSave: "Save\tCtrl+S",
       fileSaveAs: "Save As...",
@@ -123,6 +134,11 @@
       statusDriveSaved: "Saved to Google Drive",
       statusDriveAutoConfigured: "Applied Google Drive settings automatically for Chromebook",
       confirmDiscard: "You have unsaved changes. Discard and continue?",
+      confirmCloseTab: "This tab has unsaved changes. Close it anyway?",
+      unsavedTitle: "Unsaved changes",
+      unsavedMessage: "This tab has unsaved changes.",
+      unsavedSave: "Save",
+      unsavedDiscard: "Don't Save",
       saveFailed: "Failed to save: {error}",
       searchNotFound: "Search text was not found.",
       oauthClientRequired: "Please enter an OAuth Client ID.",
@@ -168,18 +184,19 @@
     find: document.getElementById("findDialog"),
     replace: document.getElementById("replaceDialog"),
     goTo: document.getElementById("goToDialog"),
+    unsaved: document.getElementById("unsavedDialog"),
     about: document.getElementById("aboutDialog"),
     driveConfig: document.getElementById("driveConfigDialog"),
     driveFile: document.getElementById("driveFileDialog")
   };
 
+  const SESSION_STORAGE_KEY = "web-notepad.session.v1";
+
   const state = {
-    textChanged: false,
     wordWrap: false,
     statusBarVisible: true,
-    fileName: t("untitled"),
-    localFileHandle: null,
-    driveFileId: null,
+    tabs: [],
+    activeTabId: null,
     driveClientId: localStorage.getItem("web-notepad.driveClientId") || "",
     driveToken: null,
     tokenClient: null,
@@ -187,12 +204,241 @@
     deferredInstallPrompt: null
   };
 
+  function createTab(initial = {}) {
+    return {
+      id: initial.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      fileName: initial.fileName || t("untitled"),
+      text: initial.text || "",
+      textChanged: Boolean(initial.textChanged),
+      localFileHandle: initial.localFileHandle || null,
+      driveFileId: initial.driveFileId || null
+    };
+  }
+
+  function persistSession() {
+    try {
+      const data = {
+        activeTabId: state.activeTabId,
+        tabs: state.tabs.map((tab) => ({
+          id: tab.id,
+          fileName: tab.fileName,
+          text: tab.text,
+          textChanged: tab.textChanged,
+          driveFileId: tab.driveFileId
+        }))
+      };
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // Ignore storage quota errors and private mode restrictions.
+    }
+  }
+
+  function restoreSession() {
+    try {
+      const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (!raw) {
+        return false;
+      }
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.tabs) || parsed.tabs.length === 0) {
+        return false;
+      }
+
+      state.tabs = parsed.tabs.map((tab) =>
+        createTab({
+          id: tab.id,
+          fileName: typeof tab.fileName === "string" && tab.fileName ? tab.fileName : t("untitled"),
+          text: typeof tab.text === "string" ? tab.text : "",
+          textChanged: Boolean(tab.textChanged),
+          driveFileId: tab.driveFileId || null
+        })
+      );
+
+      const restoredActive = parsed.activeTabId;
+      const hasActive = state.tabs.some((tab) => tab.id === restoredActive);
+      state.activeTabId = hasActive ? restoredActive : state.tabs[0].id;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function askUnsavedAction(message) {
+    const messageNode = document.getElementById("unsavedDialogMessage");
+    if (messageNode) {
+      messageNode.textContent = message || t("unsavedMessage");
+    }
+
+    dialogs.unsaved.returnValue = "cancel";
+    dialogs.unsaved.showModal();
+    return new Promise((resolve) => {
+      const onClose = () => {
+        dialogs.unsaved.removeEventListener("close", onClose);
+        resolve(dialogs.unsaved.returnValue || "cancel");
+      };
+      dialogs.unsaved.addEventListener("close", onClose);
+    });
+  }
+
+  async function ensureTabSavedOrDiscarded(tab) {
+    if (!tab || !tab.textChanged) {
+      return true;
+    }
+
+    const action = await askUnsavedAction(t("unsavedMessage"));
+    if (action === "cancel") {
+      return false;
+    }
+    if (action === "discard") {
+      return true;
+    }
+
+    const previousActiveId = state.activeTabId;
+    state.activeTabId = tab.id;
+    syncEditorFromActiveTab();
+    const saved = await saveLocalFile();
+
+    if (!saved) {
+      return false;
+    }
+
+    if (state.tabs.some((item) => item.id === previousActiveId)) {
+      state.activeTabId = previousActiveId;
+      syncEditorFromActiveTab();
+    }
+    return true;
+  }
+
+  function getActiveTab() {
+    return state.tabs.find((tab) => tab.id === state.activeTabId) || null;
+  }
+
+  function ensureActiveTab() {
+    if (!state.tabs.length) {
+      const tab = createTab();
+      state.tabs.push(tab);
+      state.activeTabId = tab.id;
+      return tab;
+    }
+    if (!getActiveTab()) {
+      state.activeTabId = state.tabs[0].id;
+    }
+    return getActiveTab();
+  }
+
+  function renderTabs() {
+    tabList.innerHTML = "";
+    state.tabs.forEach((tab) => {
+      const tabBtn = document.createElement("button");
+      tabBtn.type = "button";
+      tabBtn.className = `tab${tab.id === state.activeTabId ? " active" : ""}`;
+      tabBtn.dataset.tabId = tab.id;
+
+      const title = document.createElement("span");
+      title.className = "tab__title";
+      title.textContent = `${tab.textChanged ? "● " : ""}${tab.fileName}`;
+
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "tab__close";
+      closeBtn.textContent = "×";
+      closeBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await closeTab(tab.id);
+      });
+
+      tabBtn.addEventListener("click", () => switchTab(tab.id));
+      tabBtn.addEventListener("auxclick", async (e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+          await closeTab(tab.id);
+        }
+      });
+
+      tabBtn.append(title, closeBtn);
+      tabList.appendChild(tabBtn);
+    });
+  }
+
+  function syncEditorFromActiveTab() {
+    const active = ensureActiveTab();
+    editor.value = active.text;
+    updateCursorStatus();
+    renderTabs();
+    setTitle();
+  }
+
+  function syncActiveTabFromEditor() {
+    const active = getActiveTab();
+    if (!active) {
+      return;
+    }
+    active.text = editor.value;
+    persistSession();
+  }
+
+  function switchTab(tabId) {
+    syncActiveTabFromEditor();
+    state.activeTabId = tabId;
+    persistSession();
+    syncEditorFromActiveTab();
+    editor.focus();
+  }
+
+  function openNewTab(initial = {}) {
+    syncActiveTabFromEditor();
+    const tab = createTab(initial);
+    state.tabs.push(tab);
+    state.activeTabId = tab.id;
+    persistSession();
+    syncEditorFromActiveTab();
+  }
+
+  async function closeTab(tabId) {
+    const tab = state.tabs.find((item) => item.id === tabId);
+    if (!tab) {
+      return;
+    }
+    const canClose = await ensureTabSavedOrDiscarded(tab);
+    if (!canClose) {
+      return;
+    }
+
+    const closeIndex = state.tabs.findIndex((item) => item.id === tabId);
+    state.tabs.splice(closeIndex, 1);
+    if (!state.tabs.length) {
+      const fresh = createTab();
+      state.tabs.push(fresh);
+      state.activeTabId = fresh.id;
+    } else if (state.activeTabId === tabId) {
+      const next = state.tabs[Math.min(closeIndex, state.tabs.length - 1)];
+      state.activeTabId = next.id;
+    }
+    persistSession();
+    syncEditorFromActiveTab();
+  }
+
+  function moveTabBy(offset) {
+    if (state.tabs.length <= 1) {
+      return;
+    }
+    const index = state.tabs.findIndex((tab) => tab.id === state.activeTabId);
+    if (index === -1) {
+      return;
+    }
+    const nextIndex = (index + offset + state.tabs.length) % state.tabs.length;
+    switchTab(state.tabs[nextIndex].id);
+  }
+
   let MENU_DEFS = {};
 
   function buildMenuDefs() {
     MENU_DEFS = {
       file: [
         [t("fileNew"), () => newFile()],
+        [t("fileNewTab"), () => openNewTab()],
+        [t("fileCloseTab"), () => closeActiveTab()],
+        "sep",
         [t("fileOpen"), () => openLocalFile()],
         [t("fileSave"), () => saveLocalFile()],
         [t("fileSaveAs"), () => saveLocalFileAs()],
@@ -255,6 +501,11 @@
     setText("goToDialogLabel", t("goToLabel"));
     setText("goToBtn", t("goToBtn"));
     setText("goToCancelBtn", t("cancel"));
+    setText("unsavedDialogTitle", t("unsavedTitle"));
+    setText("unsavedDialogMessage", t("unsavedMessage"));
+    setText("unsavedSaveBtn", t("unsavedSave"));
+    setText("unsavedDiscardBtn", t("unsavedDiscard"));
+    setText("unsavedCancelBtn", t("cancel"));
     setText("aboutDialogTitle", t("aboutTitle"));
     setText("aboutName", t("aboutName"));
     setText("aboutDesc", t("aboutDesc"));
@@ -359,13 +610,21 @@
   }
 
   function setTitle() {
-    const dirty = state.textChanged ? "*" : "";
-    windowTitle.textContent = `${dirty}${state.fileName} - ${t("appName")}`;
-    document.title = `${dirty}${state.fileName} - ${t("appName")}`;
+    const active = ensureActiveTab();
+    const dirty = active.textChanged ? "*" : "";
+    windowTitle.textContent = `${dirty}${active.fileName} - ${t("appName")}`;
+    document.title = `${dirty}${active.fileName} - ${t("appName")}`;
   }
 
   function markDirty(flag) {
-    state.textChanged = flag;
+    const active = getActiveTab();
+    if (!active) {
+      return;
+    }
+    active.textChanged = flag;
+    syncActiveTabFromEditor();
+    persistSession();
+    renderTabs();
     setTitle();
   }
 
@@ -396,35 +655,46 @@
     return name;
   }
 
-  function newFile() {
-    if (!confirmDiscardIfNeeded()) {
+  async function newFile() {
+    if (!(await confirmDiscardIfNeeded())) {
       return;
     }
-    editor.value = "";
-    state.fileName = t("untitled");
-    state.localFileHandle = null;
-    state.driveFileId = null;
+    const active = ensureActiveTab();
+    active.text = "";
+    active.fileName = t("untitled");
+    active.localFileHandle = null;
+    active.driveFileId = null;
     state.latestFindIndex = -1;
     markDirty(false);
-    updateCursorStatus();
+    syncEditorFromActiveTab();
   }
 
-  function maybeConfirmDiscard() {
-    if (!confirmDiscardIfNeeded()) {
-      return;
+  async function closeActiveTab() {
+    await closeTab(state.activeTabId);
+  }
+
+  async function maybeConfirmDiscard() {
+    const dirtyTabs = [...state.tabs].filter((tab) => tab.textChanged);
+    for (const tab of dirtyTabs) {
+      const ok = await ensureTabSavedOrDiscarded(tab);
+      if (!ok) {
+        return;
+      }
     }
     window.close();
   }
 
-  function confirmDiscardIfNeeded() {
-    if (!state.textChanged) {
+  async function confirmDiscardIfNeeded() {
+    const active = ensureActiveTab();
+    if (!active.textChanged) {
       return true;
     }
-    return window.confirm(t("confirmDiscard"));
+    return ensureTabSavedOrDiscarded(active);
   }
 
   async function openLocalFile() {
-    if (!confirmDiscardIfNeeded()) {
+    const active = ensureActiveTab();
+    if (!(await confirmDiscardIfNeeded())) {
       return;
     }
 
@@ -443,12 +713,12 @@
         }
         const file = await handle.getFile();
         const content = await file.text();
-        editor.value = content;
-        state.localFileHandle = handle;
-        state.fileName = fileNameFromPath(file.name);
-        state.driveFileId = null;
+        active.text = content;
+        active.localFileHandle = handle;
+        active.fileName = fileNameFromPath(file.name);
+        active.driveFileId = null;
         markDirty(false);
-        updateCursorStatus();
+        syncEditorFromActiveTab();
         return;
       } catch (err) {
         if (err && err.name === "AbortError") {
@@ -462,26 +732,30 @@
   }
 
   async function saveLocalFile() {
-    if (state.localFileHandle) {
+    const active = ensureActiveTab();
+    if (active.localFileHandle) {
       try {
-        const writable = await state.localFileHandle.createWritable();
+        const writable = await active.localFileHandle.createWritable();
         await writable.write(editor.value);
         await writable.close();
+        active.text = editor.value;
         markDirty(false);
         statusText.textContent = t("statusSaved");
-        return;
+        return true;
       } catch (err) {
         alert(t("saveFailed", { error: err.message }));
+        return false;
       }
     }
-    await saveLocalFileAs();
+    return saveLocalFileAs();
   }
 
   async function saveLocalFileAs() {
+    const active = ensureActiveTab();
     if (window.showSaveFilePicker) {
       try {
         const handle = await window.showSaveFilePicker({
-          suggestedName: state.fileName === t("untitled") ? "untitled.txt" : state.fileName,
+          suggestedName: active.fileName === t("untitled") ? "untitled.txt" : active.fileName,
           types: [
             {
               description: locale === "ja" ? "テキスト" : "Text",
@@ -490,15 +764,16 @@
           ]
         });
         if (!handle) {
-          return;
+          return false;
         }
-        state.localFileHandle = handle;
-        state.fileName = fileNameFromPath(handle.name);
+        active.localFileHandle = handle;
+        active.fileName = fileNameFromPath(handle.name);
+        renderTabs();
         await saveLocalFile();
-        return;
+        return true;
       } catch (err) {
         if (err && err.name === "AbortError") {
-          return;
+          return false;
         }
       }
     }
@@ -507,12 +782,14 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = state.fileName === t("untitled") ? "untitled.txt" : state.fileName;
+    a.download = active.fileName === t("untitled") ? "untitled.txt" : active.fileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    active.text = editor.value;
     markDirty(false);
+    return true;
   }
 
   function openFindDialog() {
@@ -778,6 +1055,7 @@
   }
 
   async function openFromDrive() {
+    const active = ensureActiveTab();
     try {
       await getDriveAccessToken();
       const res = await driveFetch(
@@ -803,12 +1081,12 @@
         openBtn.addEventListener("click", async () => {
           const contentRes = await driveFetch(`/drive/v3/files/${file.id}?alt=media`);
           const text = await contentRes.text();
-          editor.value = text;
-          state.fileName = file.name;
-          state.driveFileId = file.id;
-          state.localFileHandle = null;
+          active.text = text;
+          active.fileName = file.name;
+          active.driveFileId = file.id;
+          active.localFileHandle = null;
           markDirty(false);
-          updateCursorStatus();
+          syncEditorFromActiveTab();
           dialogs.driveFile.close();
           statusText.textContent = t("statusDriveLoaded");
         });
@@ -822,11 +1100,12 @@
   }
 
   async function saveToDrive() {
+    const active = ensureActiveTab();
     try {
       await getDriveAccessToken();
       const boundary = "-------314159265358979323846";
       const metadata = {
-        name: state.fileName === t("untitled") ? "untitled.txt" : state.fileName,
+        name: active.fileName === t("untitled") ? "untitled.txt" : active.fileName,
         mimeType: "text/plain"
       };
 
@@ -840,8 +1119,8 @@
         `--${boundary}--`;
 
       let res;
-      if (state.driveFileId) {
-        res = await driveFetch(`/upload/drive/v3/files/${state.driveFileId}?uploadType=multipart`, {
+      if (active.driveFileId) {
+        res = await driveFetch(`/upload/drive/v3/files/${active.driveFileId}?uploadType=multipart`, {
           method: "PATCH",
           headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
           body: multipartRequestBody
@@ -855,9 +1134,10 @@
       }
 
       const data = await res.json();
-      state.driveFileId = data.id || state.driveFileId;
-      state.fileName = data.name || metadata.name;
-      state.localFileHandle = null;
+      active.driveFileId = data.id || active.driveFileId;
+      active.fileName = data.name || metadata.name;
+      active.localFileHandle = null;
+      active.text = editor.value;
       markDirty(false);
       statusText.textContent = t("statusDriveSaved");
     } catch (err) {
@@ -867,6 +1147,7 @@
 
   function bindEvents() {
     editor.addEventListener("input", () => {
+      syncActiveTabFromEditor();
       markDirty(true);
       updateCursorStatus();
     });
@@ -877,35 +1158,37 @@
     editor.addEventListener("dragover", (e) => e.preventDefault());
     editor.addEventListener("drop", async (e) => {
       e.preventDefault();
+      const active = ensureActiveTab();
       const file = e.dataTransfer.files[0];
       if (!file) {
         return;
       }
       const text = await file.text();
-      editor.value = text;
-      state.fileName = file.name;
-      state.localFileHandle = null;
-      state.driveFileId = null;
+      active.text = text;
+      active.fileName = file.name;
+      active.localFileHandle = null;
+      active.driveFileId = null;
       markDirty(false);
-      updateCursorStatus();
+      syncEditorFromActiveTab();
     });
 
     localFileInput.addEventListener("change", async () => {
+      const active = ensureActiveTab();
       const file = localFileInput.files[0];
       if (!file) {
         return;
       }
       const content = await file.text();
-      editor.value = content;
-      state.fileName = file.name;
-      state.localFileHandle = null;
-      state.driveFileId = null;
+      active.text = content;
+      active.fileName = file.name;
+      active.localFileHandle = null;
+      active.driveFileId = null;
       markDirty(false);
-      updateCursorStatus();
+      syncEditorFromActiveTab();
     });
 
     window.addEventListener("beforeunload", (e) => {
-      if (!state.textChanged) {
+      if (!state.tabs.some((tab) => tab.textChanged)) {
         return;
       }
       e.preventDefault();
@@ -933,7 +1216,16 @@
         openLocalFile();
       } else if (ctrl && e.key.toLowerCase() === "n") {
         e.preventDefault();
-        newFile();
+        openNewTab();
+      } else if (ctrl && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        openNewTab();
+      } else if (ctrl && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        closeActiveTab();
+      } else if (ctrl && e.key === "Tab") {
+        e.preventDefault();
+        moveTabBy(e.shiftKey ? -1 : 1);
       } else if (ctrl && e.key.toLowerCase() === "f") {
         e.preventDefault();
         openFindDialog();
@@ -953,12 +1245,19 @@
         closeMenuPopup();
       }
     });
+
+    newTabBtn.addEventListener("click", () => openNewTab());
   }
 
   function init() {
     registerServiceWorker();
     applyLocalizedTexts();
     autoConfigureDriveIfNeeded();
+    if (!restoreSession()) {
+      openNewTab();
+    } else {
+      syncEditorFromActiveTab();
+    }
     buildMenuDefs();
     setTitle();
     setWordWrap(false);
