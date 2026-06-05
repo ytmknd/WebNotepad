@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1a5fb4" />
+    <title>無題 - Web メモ帳</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon-192.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-192.svg" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <div class="window" role="application" aria-label="Web メモ帳">
+      <header class="title-bar">
+        <div class="title-bar__left">
+          <div class="app-icon" aria-hidden="true"></div>
+          <span id="windowTitle">無題 - Web メモ帳</span>
+        </div>
+        <div class="title-bar__controls" aria-hidden="true">
+          <button class="sys-btn" title="最小化">_</button>
+          <button class="sys-btn" title="最大化">&#9633;</button>
+          <button class="sys-btn sys-btn--close" title="閉じる">&#10005;</button>
+        </div>
+      </header>
+
+      <nav class="menu-bar" aria-label="メニュー" id="menuBar">
+        <button class="menu-item" data-menu="file" id="menuFileBtn">ファイル(F)</button>
+        <button class="menu-item" data-menu="edit" id="menuEditBtn">編集(E)</button>
+        <button class="menu-item" data-menu="format" id="menuFormatBtn">書式(O)</button>
+        <button class="menu-item" data-menu="view" id="menuViewBtn">表示(V)</button>
+        <button class="menu-item" data-menu="help" id="menuHelpBtn">ヘルプ(H)</button>
+      </nav>
+
+      <section class="dropzone-wrap">
+        <textarea
+          id="editor"
+          class="editor"
+          spellcheck="false"
+          wrap="off"
+          aria-label="テキスト編集エリア"
+        ></textarea>
+        <input id="localFileInput" type="file" class="hidden" />
+      </section>
+
+      <footer class="status-bar" id="statusBar">
+        <span id="statusText">UTF-8</span>
+        <span id="lineCol">Ln 1, Col 1</span>
+      </footer>
+    </div>
+
+    <div id="menuPopup" class="menu-popup hidden" role="menu" aria-label="ポップアップメニュー"></div>
+
+    <dialog id="findDialog" class="app-dialog">
+      <form method="dialog" id="findForm">
+        <h2 id="findDialogTitle">検索</h2>
+        <label>
+          <span id="findDialogLabel">検索する文字列:</span>
+          <input id="findInput" type="text" />
+        </label>
+        <div class="dialog-actions">
+          <button id="findNextBtn" value="default">次を検索</button>
+          <button id="findCancelBtn" value="cancel">キャンセル</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="replaceDialog" class="app-dialog">
+      <form method="dialog" id="replaceForm">
+        <h2 id="replaceDialogTitle">置換</h2>
+        <label>
+          <span id="replaceFindLabel">検索する文字列:</span>
+          <input id="replaceFindInput" type="text" />
+        </label>
+        <label>
+          <span id="replaceToLabel">置換後の文字列:</span>
+          <input id="replaceToInput" type="text" />
+        </label>
+        <div class="dialog-actions">
+          <button id="replaceNextBtn" value="default">次を検索</button>
+          <button id="replaceOneBtn" value="default">置換</button>
+          <button id="replaceAllBtn" value="default">すべて置換</button>
+          <button id="replaceCancelBtn" value="cancel">キャンセル</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="goToDialog" class="app-dialog">
+      <form method="dialog" id="goToForm">
+        <h2 id="goToDialogTitle">指定行へ移動</h2>
+        <label>
+          <span id="goToDialogLabel">行番号:</span>
+          <input id="goToLineInput" type="number" min="1" step="1" />
+        </label>
+        <div class="dialog-actions">
+          <button id="goToBtn" value="default">移動</button>
+          <button id="goToCancelBtn" value="cancel">キャンセル</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="aboutDialog" class="app-dialog">
+      <form method="dialog">
+        <h2 id="aboutDialogTitle">バージョン情報</h2>
+        <p id="aboutName">Web メモ帳</p>
+        <p id="aboutDesc">Windows メモ帳風 UI のブラウザ版テキストエディタです。</p>
+        <div class="dialog-actions">
+          <button id="aboutOkBtn" value="default">OK</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="driveConfigDialog" class="app-dialog">
+      <form method="dialog" id="driveConfigForm">
+        <h2 id="driveConfigTitle">Google Drive 設定</h2>
+        <p class="hint" id="driveConfigHint">Google Cloud で発行した OAuth クライアントIDを入力してください。</p>
+        <label>
+          <span id="driveClientLabel">OAuth Client ID:</span>
+          <input id="driveClientIdInput" type="text" placeholder="1234567890-xxxxx.apps.googleusercontent.com" />
+        </label>
+        <div class="dialog-actions">
+          <button id="saveDriveConfigBtn" value="default">保存</button>
+          <button id="driveConfigCancelBtn" value="cancel">キャンセル</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="driveFileDialog" class="app-dialog drive-file-dialog">
+      <form method="dialog" id="driveFileForm">
+        <h2 id="driveFileDialogTitle">Google Drive から開く</h2>
+        <div id="driveFileList" class="drive-file-list"></div>
+        <div class="dialog-actions">
+          <button id="driveFileCloseBtn" value="cancel">閉じる</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

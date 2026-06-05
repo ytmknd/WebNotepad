@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>オフライン - Web メモ帳</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        font-family: "Yu Gothic UI", sans-serif;
+        background: #0d2b45;
+        color: #ffffff;
+      }
+      body {
+        display: grid;
+        place-items: center;
+      }
+      .card {
+        width: min(520px, calc(100vw - 24px));
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 20px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+      p {
+        margin: 8px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>オフラインです</h1>
+      <p>ネットワークに接続できないため、一部機能が使えません。</p>
+      <p>ローカル編集は継続できます。Google Drive連携は接続後に再試行してください。</p>
+    </main>
+  </body>
+</html>
