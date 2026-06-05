@@ -24,6 +24,10 @@ Open `index.html` in a modern browser.
 
 For best local file save behavior on Chromebook, use Chrome browser and open with a local or hosted HTTP URL.
 
+Hosted version (GitHub Pages):
+
+- https://ytmknd.github.io/WebNotepad/
+
 ## PWA Install (Chromebook)
 
 To make this app installable as a Chromebook app, run it over HTTP/HTTPS (not `file://`).
