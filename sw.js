@@ -1,4 +1,4 @@
-const CACHE_NAME = "web-notepad-v4";
+const CACHE_NAME = "web-notepad-v5";
 const APP_SHELL = [
   "./",
   "./index.html",
