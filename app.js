@@ -17,11 +17,13 @@
     ja: {
       appName: "Web メモ帳",
       untitled: "無題",
-      menuFile: "ファイル(F)",
-      menuEdit: "編集(E)",
-      menuFormat: "書式(O)",
-      menuView: "表示(V)",
-      menuHelp: "ヘルプ(H)",
+      menuFile: "ファイル",
+      menuEdit: "編集",
+      menuFormat: "書式",
+      menuView: "表示",
+      menuHelp: "ヘルプ",
+      charCount: "{count} 文字",
+      textFormat: "テキスト",
       fileNew: "新規\tCtrl+N",
       fileNewTab: "新しいタブ\tCtrl+T",
       fileCloseTab: "タブを閉じる\tCtrl+W",
@@ -74,7 +76,7 @@
       driveSaveFailed: "Google Drive 保存に失敗しました: {error}",
       driveConfigIncomplete: "Google Drive 設定が未完了です。",
       installFallback: "このページをPWAとしてインストールするには、Chromeのメニューから『アプリをインストール』を選択してください。",
-      cursor: "Ln {line}, Col {col}",
+      cursor: "行 {line}、列 {col}",
       findTitle: "検索",
       findLabel: "検索する文字列:",
       findNext: "次を検索",
@@ -102,11 +104,13 @@
     en: {
       appName: "Web Notepad",
       untitled: "Untitled",
-      menuFile: "File(F)",
-      menuEdit: "Edit(E)",
-      menuFormat: "Format(O)",
-      menuView: "View(V)",
-      menuHelp: "Help(H)",
+      menuFile: "File",
+      menuEdit: "Edit",
+      menuFormat: "Format",
+      menuView: "View",
+      menuHelp: "Help",
+      charCount: "{count} characters",
+      textFormat: "Text",
       fileNew: "New\tCtrl+N",
       fileNewTab: "New Tab\tCtrl+T",
       fileCloseTab: "Close Tab\tCtrl+W",
@@ -458,22 +462,32 @@
       const tabBtn = document.createElement("button");
       tabBtn.type = "button";
       tabBtn.draggable = true;
-      tabBtn.className = `tab${tab.id === state.activeTabId ? " active" : ""}`;
+      tabBtn.className = `tab${tab.id === state.activeTabId ? " active" : ""}${tab.textChanged ? " dirty" : ""}`;
       tabBtn.dataset.tabId = tab.id;
 
       const title = document.createElement("span");
       title.className = "tab__title";
-      title.textContent = `${tab.textChanged ? "● " : ""}${tab.fileName}`;
+      title.textContent = tab.fileName;
+
+      const actions = document.createElement("span");
+      actions.className = "tab__actions";
+
+      const dot = document.createElement("span");
+      dot.className = "tab__dot";
+      dot.textContent = "●";
+      dot.setAttribute("aria-hidden", "true");
 
       const closeBtn = document.createElement("button");
       closeBtn.type = "button";
       closeBtn.draggable = false;
       closeBtn.className = "tab__close";
       closeBtn.textContent = "×";
+      closeBtn.setAttribute("aria-label", t("tabClose"));
       closeBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
         await closeTab(tab.id);
       });
+      actions.append(dot, closeBtn);
 
       tabBtn.addEventListener("click", () => switchTab(tab.id));
       tabBtn.addEventListener("auxclick", async (e) => {
@@ -511,7 +525,7 @@
         tabList.querySelectorAll(".tab--drag-over").forEach((node) => node.classList.remove("tab--drag-over"));
       });
 
-      tabBtn.append(title, closeBtn);
+      tabBtn.append(title, actions);
       tabList.appendChild(tabBtn);
     });
   }
@@ -638,8 +652,10 @@
         [t("editSelectAll"), () => editor.select()],
         [t("editDateTime"), () => insertDateTime()]
       ],
-      format: [[t("formatWordWrap"), () => toggleWordWrap(), () => state.wordWrap]],
-      view: [[t("viewStatusBar"), () => toggleStatusBar(), () => state.statusBarVisible]],
+      view: [
+        [t("formatWordWrap"), () => toggleWordWrap(), () => state.wordWrap],
+        [t("viewStatusBar"), () => toggleStatusBar(), () => state.statusBarVisible]
+      ],
       help: [[t("helpInstall"), () => installAsApp()], "sep", [t("helpAbout"), () => dialogs.about.showModal()]]
     };
   }
@@ -656,9 +672,8 @@
 
     setText("menuFileBtn", t("menuFile"));
     setText("menuEditBtn", t("menuEdit"));
-    setText("menuFormatBtn", t("menuFormat"));
     setText("menuViewBtn", t("menuView"));
-    setText("menuHelpBtn", t("menuHelp"));
+    setText("textFormat", t("textFormat"));
     setText("findDialogTitle", t("findTitle"));
     setText("findDialogLabel", t("findLabel"));
     setText("findNextBtn", t("findNext"));
@@ -813,6 +828,10 @@
     const line = textUntilPos.split("\n").length;
     const col = pos - textUntilPos.lastIndexOf("\n");
     lineCol.textContent = t("cursor", { line, col });
+    const charCountNode = document.getElementById("charCount");
+    if (charCountNode) {
+      charCountNode.textContent = t("charCount", { count: value.length });
+    }
   }
 
   function setWordWrap(enabled) {
@@ -1068,6 +1087,90 @@
     updateCursorStatus();
   }
 
+  function wrapSelection(before, after) {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const selected = editor.value.slice(start, end);
+    if (start === end) {
+      editor.setRangeText(before + after, start, end, "end");
+      const caret = start + before.length;
+      editor.setSelectionRange(caret, caret);
+    } else {
+      editor.setRangeText(before + selected + after, start, end, "end");
+    }
+    markDirty(true);
+    updateCursorStatus();
+    editor.focus();
+  }
+
+  function applyLinePrefix(prefix) {
+    const start = editor.selectionStart;
+    const lineStart = editor.value.lastIndexOf("\n", start - 1) + 1;
+    editor.setRangeText(prefix, lineStart, lineStart, "end");
+    markDirty(true);
+    updateCursorStatus();
+    editor.focus();
+  }
+
+  function insertLink() {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const selected = editor.value.slice(start, end) || (locale === "ja" ? "リンク" : "link");
+    editor.setRangeText(`[${selected}](https://)`, start, end, "end");
+    markDirty(true);
+    updateCursorStatus();
+    editor.focus();
+  }
+
+  function insertTable() {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const table = "\n| 列1 | 列2 |\n| --- | --- |\n| 値1 | 値2 |\n";
+    editor.setRangeText(table, start, end, "end");
+    markDirty(true);
+    updateCursorStatus();
+    editor.focus();
+  }
+
+  function clearFormatting() {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    if (start === end) {
+      return;
+    }
+    const cleaned = editor.value
+      .slice(start, end)
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/\*(.*?)\*/g, "$1")
+      .replace(/~~(.*?)~~/g, "$1")
+      .replace(/`(.*?)`/g, "$1")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^[-*]\s+/gm, "");
+    editor.setRangeText(cleaned, start, end, "end");
+    markDirty(true);
+    updateCursorStatus();
+    editor.focus();
+  }
+
+  function bindToolbar() {
+    const handlers = {
+      heading: () => applyLinePrefix("# "),
+      bullet: () => applyLinePrefix("- "),
+      bold: () => wrapSelection("**", "**"),
+      italic: () => wrapSelection("*", "*"),
+      strike: () => wrapSelection("~~", "~~"),
+      link: () => insertLink(),
+      table: () => insertTable(),
+      clear: () => clearFormatting()
+    };
+    document.querySelectorAll("[data-tool]").forEach((btn) => {
+      const handler = handlers[btn.dataset.tool];
+      if (handler) {
+        btn.addEventListener("click", handler);
+      }
+    });
+  }
+
   function toggleWordWrap() {
     setWordWrap(!state.wordWrap);
   }
@@ -1119,9 +1222,14 @@
       menuPopup.appendChild(btn);
     }
     const rect = anchorButton.getBoundingClientRect();
-    menuPopup.style.left = `${rect.left}px`;
-    menuPopup.style.top = `${rect.bottom}px`;
     menuPopup.classList.remove("hidden");
+    const width = menuPopup.offsetWidth;
+    let left = rect.left;
+    if (left + width > window.innerWidth - 8) {
+      left = window.innerWidth - 8 - width;
+    }
+    menuPopup.style.left = `${Math.max(8, left)}px`;
+    menuPopup.style.top = `${rect.bottom}px`;
   }
 
   function bindMenu() {
@@ -1440,6 +1548,12 @@
       } else if (ctrl && e.key.toLowerCase() === "g") {
         e.preventDefault();
         openGoToDialog();
+      } else if (ctrl && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        wrapSelection("**", "**");
+      } else if (ctrl && e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        wrapSelection("*", "*");
       } else if (e.key === "F3") {
         e.preventDefault();
         findNext();
@@ -1470,6 +1584,7 @@
     setStatusBarVisible(true);
     bindMenu();
     bindDialogs();
+    bindToolbar();
     bindEvents();
     updateCursorStatus();
   }

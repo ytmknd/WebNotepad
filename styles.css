@@ -75,9 +75,9 @@ body {
 }
 
 .app-icon {
-  width: 16px;
-  height: 16px;
-  margin-bottom: 8px;
+  width: 20px;
+  height: 20px;
+  margin: 0 4px 7px 0;
   flex: none;
   background: url("icons/icon-192.svg") center / contain no-repeat;
 }
@@ -171,6 +171,7 @@ body {
 .tab.active,
 .tab.active:hover {
   background: var(--editor-bg);
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .tab.active::after,
@@ -192,20 +193,53 @@ body {
   white-space: nowrap;
 }
 
-.tab__close {
+.tab__actions {
+  position: relative;
   flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.tab__dot {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  color: var(--text-soft);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.tab__close {
+  position: absolute;
+  inset: 0;
   border: none;
   background: transparent;
   color: var(--text-soft);
-  width: 22px;
-  height: 22px;
   display: grid;
   place-items: center;
   border-radius: 5px;
   padding: 0;
   font-size: 15px;
   line-height: 1;
+  opacity: 0;
   cursor: default;
+}
+
+/* show the close X when the tab is active or hovered */
+.tab.active .tab__close,
+.tab:hover .tab__close {
+  opacity: 1;
+}
+
+/* show the modified dot only while the X is hidden */
+.tab.dirty .tab__dot {
+  display: grid;
+}
+
+.tab.dirty.active .tab__dot,
+.tab.dirty:hover .tab__dot {
+  display: none;
 }
 
 .tab__close:hover {
@@ -231,21 +265,27 @@ body {
   background: rgba(0, 0, 0, 0.08);
 }
 
-/* ---------- Menu (command) bar ---------- */
+/* ---------- Menu + formatting toolbar (Win11) ---------- */
 .menu-bar {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
   background: var(--editor-bg);
   border-bottom: 1px solid var(--border);
-  padding: 4px 8px;
+  padding: 5px 8px;
+}
+
+.menu-bar__menus {
+  display: flex;
+  gap: 2px;
+  flex: none;
 }
 
 .menu-item {
   border: 1px solid transparent;
   background: transparent;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text);
   padding: 5px 10px;
   border-radius: 5px;
@@ -258,6 +298,86 @@ body {
 
 .menu-item.active {
   background: var(--hover-strong);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* center formatting group fills the gap between menus and the right group */
+.menu-bar > .toolbar:not(.toolbar--right) {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.toolbar--right {
+  flex: none;
+}
+
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 7px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: 5px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: default;
+}
+
+.tool-btn:hover {
+  background: var(--hover);
+}
+
+.tool-btn .chev {
+  color: var(--text-soft);
+}
+
+.tool-btn__text {
+  font-size: 13.5px;
+}
+
+.tool-btn__b {
+  font-weight: 700;
+}
+
+.tool-btn__i {
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.tool-btn__s {
+  text-decoration: line-through;
+}
+
+.tool-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border-strong);
+}
+
+.tool-btn--badge {
+  position: relative;
+}
+
+.tool-btn--badge::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 /* ---------- Editor ---------- */
@@ -285,19 +405,26 @@ body {
 /* ---------- Status bar ---------- */
 .status-bar {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
-  gap: 0;
   background: var(--win-bg);
   border-top: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-soft);
   padding: 0 6px;
-  min-height: 26px;
+  min-height: 28px;
+}
+
+.status-bar__group {
+  display: flex;
+  align-items: center;
+}
+
+.status-bar__spacer {
+  flex: 1 1 auto;
 }
 
 .status-item {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 4px;
   white-space: nowrap;
 }
