@@ -24,6 +24,10 @@
       menuHelp: "ヘルプ",
       charCount: "{count} 文字",
       textFormat: "テキスト",
+      settingsTitle: "設定",
+      settingsFont: "フォント",
+      settingsFontFamily: "フォント ファミリー",
+      settingsFontSize: "サイズ",
       fileNew: "新規\tCtrl+N",
       fileNewTab: "新しいタブ\tCtrl+T",
       fileCloseTab: "タブを閉じる\tCtrl+W",
@@ -111,6 +115,10 @@
       menuHelp: "Help",
       charCount: "{count} characters",
       textFormat: "Text",
+      settingsTitle: "Settings",
+      settingsFont: "Font",
+      settingsFontFamily: "Font family",
+      settingsFontSize: "Size",
       fileNew: "New\tCtrl+N",
       fileNewTab: "New Tab\tCtrl+T",
       fileCloseTab: "Close Tab\tCtrl+W",
@@ -202,14 +210,20 @@
     unsaved: document.getElementById("unsavedDialog"),
     about: document.getElementById("aboutDialog"),
     driveConfig: document.getElementById("driveConfigDialog"),
-    driveFile: document.getElementById("driveFileDialog")
+    driveFile: document.getElementById("driveFileDialog"),
+    settings: document.getElementById("settingsDialog")
   };
 
   const SESSION_STORAGE_KEY = "web-notepad.session.v1";
+  const SETTINGS_STORAGE_KEY = "web-notepad.settings.v1";
+  const DEFAULT_FONT_FAMILY = '"Cascadia Mono", Consolas, "Lucida Console", monospace';
+  const DEFAULT_FONT_SIZE = 15;
 
   const state = {
     wordWrap: false,
     statusBarVisible: true,
+    fontFamily: DEFAULT_FONT_FAMILY,
+    fontSize: DEFAULT_FONT_SIZE,
     tabs: [],
     activeTabId: null,
     closedTabs: [],
@@ -673,7 +687,20 @@
     setText("menuFileBtn", t("menuFile"));
     setText("menuEditBtn", t("menuEdit"));
     setText("menuViewBtn", t("menuView"));
+    setText("menuHelpBtn", t("menuHelp"));
     setText("textFormat", t("textFormat"));
+    setText("settingsTitle", t("settingsTitle"));
+    setText("settingsFontHeading", t("settingsFont"));
+    setText("settingsFontFamilyLabel", t("settingsFontFamily"));
+    setText("settingsFontSizeLabel", t("settingsFontSize"));
+    setText("settingsWordWrapLabel", t("formatWordWrap"));
+    setText("settingsStatusBarLabel", t("viewStatusBar"));
+    setText("settingsCloseBtn", t("close"));
+    const settingsBtn = document.getElementById("settingsBtn");
+    if (settingsBtn) {
+      settingsBtn.setAttribute("title", t("settingsTitle"));
+      settingsBtn.setAttribute("aria-label", t("settingsTitle"));
+    }
     setText("findDialogTitle", t("findTitle"));
     setText("findDialogLabel", t("findLabel"));
     setText("findNextBtn", t("findNext"));
@@ -1087,96 +1114,99 @@
     updateCursorStatus();
   }
 
-  function wrapSelection(before, after) {
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    const selected = editor.value.slice(start, end);
-    if (start === end) {
-      editor.setRangeText(before + after, start, end, "end");
-      const caret = start + before.length;
-      editor.setSelectionRange(caret, caret);
-    } else {
-      editor.setRangeText(before + selected + after, start, end, "end");
-    }
-    markDirty(true);
-    updateCursorStatus();
-    editor.focus();
-  }
-
-  function applyLinePrefix(prefix) {
-    const start = editor.selectionStart;
-    const lineStart = editor.value.lastIndexOf("\n", start - 1) + 1;
-    editor.setRangeText(prefix, lineStart, lineStart, "end");
-    markDirty(true);
-    updateCursorStatus();
-    editor.focus();
-  }
-
-  function insertLink() {
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    const selected = editor.value.slice(start, end) || (locale === "ja" ? "リンク" : "link");
-    editor.setRangeText(`[${selected}](https://)`, start, end, "end");
-    markDirty(true);
-    updateCursorStatus();
-    editor.focus();
-  }
-
-  function insertTable() {
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    const table = "\n| 列1 | 列2 |\n| --- | --- |\n| 値1 | 値2 |\n";
-    editor.setRangeText(table, start, end, "end");
-    markDirty(true);
-    updateCursorStatus();
-    editor.focus();
-  }
-
-  function clearFormatting() {
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    if (start === end) {
-      return;
-    }
-    const cleaned = editor.value
-      .slice(start, end)
-      .replace(/\*\*(.*?)\*\*/g, "$1")
-      .replace(/\*(.*?)\*/g, "$1")
-      .replace(/~~(.*?)~~/g, "$1")
-      .replace(/`(.*?)`/g, "$1")
-      .replace(/^#{1,6}\s+/gm, "")
-      .replace(/^[-*]\s+/gm, "");
-    editor.setRangeText(cleaned, start, end, "end");
-    markDirty(true);
-    updateCursorStatus();
-    editor.focus();
-  }
-
-  function bindToolbar() {
-    const handlers = {
-      heading: () => applyLinePrefix("# "),
-      bullet: () => applyLinePrefix("- "),
-      bold: () => wrapSelection("**", "**"),
-      italic: () => wrapSelection("*", "*"),
-      strike: () => wrapSelection("~~", "~~"),
-      link: () => insertLink(),
-      table: () => insertTable(),
-      clear: () => clearFormatting()
-    };
-    document.querySelectorAll("[data-tool]").forEach((btn) => {
-      const handler = handlers[btn.dataset.tool];
-      if (handler) {
-        btn.addEventListener("click", handler);
-      }
-    });
-  }
-
   function toggleWordWrap() {
     setWordWrap(!state.wordWrap);
+    saveSettings();
   }
 
   function toggleStatusBar() {
     setStatusBarVisible(!state.statusBarVisible);
+    saveSettings();
+  }
+
+  function applyFont() {
+    editor.style.fontFamily = state.fontFamily || DEFAULT_FONT_FAMILY;
+    editor.style.fontSize = `${state.fontSize || DEFAULT_FONT_SIZE}px`;
+  }
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const saved = JSON.parse(raw) || {};
+      if (typeof saved.fontFamily === "string" && saved.fontFamily) {
+        state.fontFamily = saved.fontFamily;
+      }
+      if (Number(saved.fontSize)) {
+        state.fontSize = Number(saved.fontSize);
+      }
+      if (typeof saved.wordWrap === "boolean") {
+        state.wordWrap = saved.wordWrap;
+      }
+      if (typeof saved.statusBarVisible === "boolean") {
+        state.statusBarVisible = saved.statusBarVisible;
+      }
+    } catch {
+      // Ignore malformed settings.
+    }
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem(
+        SETTINGS_STORAGE_KEY,
+        JSON.stringify({
+          fontFamily: state.fontFamily,
+          fontSize: state.fontSize,
+          wordWrap: state.wordWrap,
+          statusBarVisible: state.statusBarVisible
+        })
+      );
+    } catch {
+      // Ignore storage restrictions.
+    }
+  }
+
+  function openSettings() {
+    const fontFamily = document.getElementById("settingsFontFamily");
+    const fontSize = document.getElementById("settingsFontSize");
+    const wordWrap = document.getElementById("settingsWordWrap");
+    const statusBar = document.getElementById("settingsStatusBar");
+    fontFamily.value = state.fontFamily;
+    fontSize.value = String(state.fontSize);
+    wordWrap.checked = state.wordWrap;
+    statusBar.checked = state.statusBarVisible;
+    dialogs.settings.showModal();
+  }
+
+  function bindSettings() {
+    const fontFamily = document.getElementById("settingsFontFamily");
+    const fontSize = document.getElementById("settingsFontSize");
+    const wordWrap = document.getElementById("settingsWordWrap");
+    const statusBar = document.getElementById("settingsStatusBar");
+
+    fontFamily.addEventListener("change", () => {
+      state.fontFamily = fontFamily.value || DEFAULT_FONT_FAMILY;
+      applyFont();
+      saveSettings();
+    });
+    fontSize.addEventListener("change", () => {
+      state.fontSize = Number(fontSize.value) || DEFAULT_FONT_SIZE;
+      applyFont();
+      saveSettings();
+    });
+    wordWrap.addEventListener("change", () => {
+      setWordWrap(wordWrap.checked);
+      saveSettings();
+    });
+    statusBar.addEventListener("change", () => {
+      setStatusBarVisible(statusBar.checked);
+      saveSettings();
+    });
+
+    document.getElementById("settingsBtn").addEventListener("click", openSettings);
   }
 
   function closeMenuPopup() {
@@ -1548,12 +1578,6 @@
       } else if (ctrl && e.key.toLowerCase() === "g") {
         e.preventDefault();
         openGoToDialog();
-      } else if (ctrl && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        wrapSelection("**", "**");
-      } else if (ctrl && e.key.toLowerCase() === "i") {
-        e.preventDefault();
-        wrapSelection("*", "*");
       } else if (e.key === "F3") {
         e.preventDefault();
         findNext();
@@ -1571,6 +1595,7 @@
 
   function init() {
     registerServiceWorker();
+    loadSettings();
     applyLocalizedTexts();
     autoConfigureDriveIfNeeded();
     if (!restoreSession()) {
@@ -1580,11 +1605,12 @@
     }
     buildMenuDefs();
     setTitle();
-    setWordWrap(false);
-    setStatusBarVisible(true);
+    applyFont();
+    setWordWrap(state.wordWrap);
+    setStatusBarVisible(state.statusBarVisible);
     bindMenu();
     bindDialogs();
-    bindToolbar();
+    bindSettings();
     bindEvents();
     updateCursorStatus();
   }

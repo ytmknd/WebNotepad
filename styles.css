@@ -300,84 +300,27 @@ body {
   background: var(--hover-strong);
 }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-/* center formatting group fills the gap between menus and the right group */
-.menu-bar > .toolbar:not(.toolbar--right) {
+.menu-bar__spacer {
   flex: 1 1 auto;
-  justify-content: center;
 }
 
-.toolbar--right {
-  flex: none;
-}
-
+/* settings gear button */
 .tool-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  min-width: 32px;
+  min-width: 34px;
   height: 32px;
   padding: 0 7px;
   border: none;
   background: transparent;
   color: var(--text);
   border-radius: 5px;
-  font-family: var(--font-ui);
-  font-size: 14px;
   cursor: default;
 }
 
 .tool-btn:hover {
   background: var(--hover);
-}
-
-.tool-btn .chev {
-  color: var(--text-soft);
-}
-
-.tool-btn__text {
-  font-size: 13.5px;
-}
-
-.tool-btn__b {
-  font-weight: 700;
-}
-
-.tool-btn__i {
-  font-style: italic;
-  font-family: Georgia, "Times New Roman", serif;
-}
-
-.tool-btn__s {
-  text-decoration: line-through;
-}
-
-.tool-sep {
-  width: 1px;
-  height: 18px;
-  margin: 0 4px;
-  background: var(--border-strong);
-}
-
-.tool-btn--badge {
-  position: relative;
-}
-
-.tool-btn--badge::after {
-  content: "";
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
 }
 
 /* ---------- Editor ---------- */
@@ -574,6 +517,62 @@ body {
 
 .dialog-actions button[value="default"]:hover {
   background: var(--accent-hover);
+}
+
+.app-dialog select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: #ffffff;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.app-dialog select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.settings-dialog {
+  width: min(440px, calc(100vw - 24px));
+}
+
+.settings-group {
+  padding: 4px 0 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.settings-group:first-of-type {
+  border-top: none;
+  margin-top: 0;
+}
+
+.settings-group__title {
+  margin: 6px 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.settings-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: none;
 }
 
 .drive-file-dialog {
